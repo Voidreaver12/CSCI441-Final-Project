@@ -1,0 +1,3 @@
+# Particle System control file
+# Type, X, Y, Z, Angle, Min V, Max V, Min Life, Max Life, Spawn Rate
+F, 0.0, 1.0, 0.0, 60.0, 3.0, 5.0, 5, 10, 50
