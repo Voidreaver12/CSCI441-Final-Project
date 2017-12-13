@@ -81,12 +81,12 @@ GLuint platformVAO;
 float platformSize = 10.0;
 
 // Particles
-/*
+GLuint particleTextureHandle;
 vector<ParticleSystem*> particleSystems;
 CSCI441::ShaderProgram *particleShaderProgram = NULL;
-GLint vpos_particle_attrib_location, vtime_particle_attrib_location;
-GLint modelview_particle_uniform_location, projection_particle_uniform_location;
-*/
+GLint attrib_particle_vpos_loc, uniform_particle_time_loc;
+GLint uniform_particle_modelview_loc, uniform_particle_projection_loc;
+
 
 // phong
 CSCI441::ShaderProgram *phongShaderProgram = NULL;
@@ -452,15 +452,15 @@ void setupShaders() {
 	vtex_texture_attrib_loaction = textureShaderProgram->getAttributeLocation( "vTex" );
 
 	// particle shader
-	/*
+	
 	particleShaderProgram = new CSCI441::ShaderProgram( "shaders/billboardQuadShader.v.glsl",
 														"shaders/billboardQuadShader.g.glsl",
 														"shaders/billboardQuadShader.f.glsl" );
-	modelview_particle_uniform_location = particleShaderProgram->getUniformLocation( "mvMatrix" );
-	projection_particle_uniform_location = particleShaderProgram->getUniformLocation( "projMatrix" );
-	vpos_particle_attrib_location = particleShaderProgram->getAttributeLocation( "vPos" );
-	vtime_particle_attrib_location = particleShaderProgram->getAttributeLocation( "vTime" );
-	*/
+	uniform_particle_modelview_loc = particleShaderProgram->getUniformLocation( "mvMatrix" );
+	uniform_particle_projection_loc = particleShaderProgram->getUniformLocation( "projMatrix" );
+	attrib_particle_vpos_loc = particleShaderProgram->getAttributeLocation( "vPos" );
+	uniform_particle_time_loc = particleShaderProgram->getUniformLocation( "time" );
+	
 
 	// phong shader
 	phongShaderProgram = new CSCI441::ShaderProgram( "shaders/Phong.v.glsl", "shaders/Phong.f.glsl" );
@@ -621,6 +621,7 @@ void setupTextures() {
 	skyboxTextureHandles[4] = CSCI441::TextureUtils::loadAndRegisterTexture( "textures/negz.jpg" );
 	skyboxTextureHandles[5] = CSCI441::TextureUtils::loadAndRegisterTexture( "textures/posz.jpg" );
 	platformTextureHandle = CSCI441::TextureUtils::loadAndRegisterTexture( "textures/platform.jpg" );
+	particleTextureHandle = CSCI441::TextureUtils::loadAndRegisterTexture( "textures/puff.png" );
 }
 
 // Used to split file contents into fields
@@ -635,28 +636,6 @@ vector<string> split(const std::string &s, char delim) {
 	return fields;
 }
 
-/*
-void setupParticleSystems(string filename) {
-	ifstream controlFile(filename);
-	if (!controlFile.good()) {
-		printf("Could not open control file.\n");
-		exit(EXIT_FAILURE);
-	}
-	std::string line;
-	while (!controlFile.eof()) {
-		getline(controlFile, line);
-		if (line.at(0) != '#') {
-			vector<string> fields = split(line, ',');
-			ParticleSystem *ps = new ParticleSystem();
-			ps->initialize(fields);
-			ps->setupBuffers(vpos_particle_attrib_location, vtime_particle_attrib_location, textureHandle);
-			particleSystems.push_back(ps);
-		}
-
-	}
-
-}
-*/
 void makeBabies() {
 	for (unsigned int i = 0; i < alpacas.size(); i++) {
 		for (unsigned int j = 0; j < alpacas.size(); j++) {
@@ -681,9 +660,25 @@ void eatAlpacas() {
 	for (int i = 0; i < numAlpacas; i++) {
 		if (glm::length(lion->headPosition() - alpacas.at(i)->position) <= eatDistance*(lion->size/0.5f)) {
 			lion->eat(alpacas.at(i)->size);
+			glm::vec3 eatPosition = alpacas.at(i)->position;
 			delete alpacas.at(i);
 			alpacas.erase(alpacas.begin() + i);
 			numAlpacas -= 1;
+
+			bool isPsNearby = false;
+			// create particle system
+			for (unsigned int i = 0; i < particleSystems.size(); i++) {
+				if (glm::length(eatPosition - particleSystems.at(i)->position) <= 0.75f) {
+					isPsNearby = true;
+				}
+			}
+			if (!isPsNearby) {
+				ParticleSystem* ps = new ParticleSystem();
+				ps->initialize(eatPosition, 60.0f, 0.1f, 0.3f, 2.0f);
+				ps->setupBuffers(attrib_particle_vpos_loc, particleTextureHandle);
+				ps->createParticles();
+				particleSystems.push_back(ps);
+			}
 		}
 	}
 }
@@ -701,6 +696,16 @@ void updateScene() {
 	if (alpacas.size() <= 100) { makeBabies(); }
 
 	eatAlpacas();
+	
+	int numPS = particleSystems.size();
+	for (int i = 0; i < numPS; i++) {
+		particleSystems.at(i)->update();
+		if (particleSystems.at(i)->dead) {
+			delete particleSystems.at(i);
+			particleSystems.erase(particleSystems.begin() + i);
+			numPS -= 1;
+		}
+	}
 }
 
 //******************************************************************************
@@ -804,21 +809,21 @@ void renderScene( glm::mat4 viewMtx, glm::mat4 projMtx ) {
 		}
 	}
 	
-	/*
+	
 	// particle shader
 	particleShaderProgram->useProgram();
-	mvMtx = viewMtx * modelMtx;
-	glUniformMatrix4fv(modelview_particle_uniform_location, 1, GL_FALSE, &mvMtx[0][0]);
-	glUniformMatrix4fv(projection_particle_uniform_location, 1, GL_FALSE, &projMtx[0][0]);
+	glm::mat4 mvMtx = viewMtx * modelMtx;
+	glUniformMatrix4fv(uniform_particle_modelview_loc, 1, GL_FALSE, &mvMtx[0][0]);
+	glUniformMatrix4fv(uniform_particle_projection_loc, 1, GL_FALSE, &projMtx[0][0]);
 	// sort particle systems
-	glm::vec4 v = glm::normalize(glm::vec4(lookAtPoint, 1) - glm::vec4(eyePointOffset, 1));
+	glm::vec4 v = glm::normalize(glm::vec4(lookAtPoint, 1) - glm::vec4(eyePoint, 1));
 	int size = particleSystems.size();
 	int* orderedIndices = new int[size];
 	float* distances = new float[size];
 	for (int i = 0; i < size; i++) {
 		glm::vec4 p = glm::vec4(particleSystems.at(i)->position, 1);
 		p = modelMtx * p;
-		glm::vec4 ep = (p - glm::vec4(eyePointOffset, 1));
+		glm::vec4 ep = (p - glm::vec4(eyePoint, 1));
 		float distance = glm::dot(v, ep);
 		orderedIndices[i] = i;
 		distances[i] = distance;
@@ -836,9 +841,9 @@ void renderScene( glm::mat4 viewMtx, glm::mat4 projMtx ) {
 		}
 	}
 	for (int i = 0; i < particleSystems.size(); i++) {
-		particleSystems.at(orderedIndices[i])->draw(lookAtPoint, eyePointOffset, modelMtx);
+		particleSystems.at(orderedIndices[i])->draw(lookAtPoint, eyePoint, modelMtx, uniform_particle_time_loc);
 	}
-	*/
+	
 }
 
 
