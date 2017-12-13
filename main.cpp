@@ -55,7 +55,7 @@ int windowWidth, windowHeight;
 bool controlDown = false;
 bool leftMouseDown = false;
 glm::vec2 mousePosition( -9999.0f, -9999.0f );
-glm::vec3 cameraLocation;
+glm::vec3 eyePoint;
 glm::vec3 lookAtPoint;
 glm::vec3 cameraAngles( 1.82f, 2.01f, 15.0f );
 glm::vec3 eyePointOffset(   10.0f, 10.0f, 10.0f );
@@ -898,13 +898,13 @@ int main( int argc, char *argv[] ) {
 		glm::mat4 projectionMatrix = glm::perspective( 45.0f, windowWidth / (float) windowHeight, 0.001f, 100.0f );
 
 		// set up our look at matrix to position our camera
-		cameraLocation = eyePointOffset + lion->position;
+		eyePoint = eyePointOffset + lion->position;
 		lookAtPoint = lion->position;
 		if (chaseCamera) {
 			lookAtPoint += lion->direction;
 		}
 		
-		glm::mat4 viewMatrix = glm::lookAt( cameraLocation, lookAtPoint, upVector );
+		glm::mat4 viewMatrix = glm::lookAt( eyePoint, lookAtPoint, upVector );
 
 		// draw everything to the window
 		// pass our view and projection matrices as well as deltaTime between frames
