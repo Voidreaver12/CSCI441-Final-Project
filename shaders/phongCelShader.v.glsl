@@ -22,9 +22,6 @@ out vec4 cameraVector;
 void main() {
 	mat4 mvMatrix = vMatrix * mMatrix;
 	mat4 mvpMatrix = pMatrix * mvMatrix;
-    //*****************************************
-    //********* Vertex Calculations  **********
-    //*****************************************
     
 	// get all variables into eye space	
 	vec4 vertexPosition = mvMatrix * vec4(vPos, 1.0);

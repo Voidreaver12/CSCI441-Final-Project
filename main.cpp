@@ -55,13 +55,15 @@ int windowWidth, windowHeight;
 bool controlDown = false;
 bool leftMouseDown = false;
 glm::vec2 mousePosition( -9999.0f, -9999.0f );
-
+glm::vec3 cameraLocation;
+glm::vec3 lookAtPoint;
 glm::vec3 cameraAngles( 1.82f, 2.01f, 15.0f );
-glm::vec3 eyePoint(   10.0f, 10.0f, 10.0f );
-glm::vec3 lookAtPoint( 0.0f,  0.0f,  0.0f );
+glm::vec3 eyePointOffset(   10.0f, 10.0f, 10.0f );
 glm::vec3 upVector(    0.0f,  1.0f,  0.0f );
 
-
+int cameraCenterResponsiveness = 15;
+float cameraScale = 10.0;
+bool chaseCamera = false;
 
 // Skybox stuff
 struct VertexTextured { GLfloat x, y, z, s, t; };
@@ -96,7 +98,6 @@ CSCI441::ShaderProgram *celShaderProgram = NULL;
 GLint cel_m_uniform_location;
 GLint cel_v_uniform_location;
 GLint cel_p_uniform_location;
-GLint fear_random_uniform_location;
 GLint cel_numlights_uniform_location;
 GLint cel_light_uniform_location;
 GLint cel_diff_uniform_location;
@@ -107,12 +108,20 @@ GLint cel_vpos_attrib_location;
 GLint cel_normal_atrrib_location;
 GLint cel_lpos_uniform_location;
 
-// lights
-glm::vec3 lightPosition ( -200.0f, 1000.0f, -100.0f );
-glm::vec3 lightPosition2 ( 1000.0f, 0.0f, -500.0f );
+CSCI441::ShaderProgram *fearShaderProgram = NULL;
+GLint fear_m_uniform_location;
+GLint fear_v_uniform_location;
+GLint fear_p_uniform_location;
+GLint fear_random_uniform_location;
+GLint fear_vpos_attrib_location;
+GLint fear_normal_atrrib_location;
 
-glm::vec4 lightColor(1.0f, 1.0f, 1.0f, 1.0f);
-glm::vec4 lightColor2(0.0f, 0.0f, 0.0f, 1.0f);
+// lights
+glm::vec3 globalLightPosition ( -200.0f, 1000.0f, -100.0f );
+glm::vec3 dynamicLightPosition ( 1000.0f, 0.0f, -500.0f );
+
+glm::vec4 globalLightColor(1.0f, 1.0f, 1.0f, 1.0f);
+glm::vec4 dynamicLightColor(0.5f, 0.0f, 0.0f, 1.0f);
 
 
 // lion and alpacas
@@ -123,6 +132,7 @@ int birthRate = 500;
 float eatDistance = 1.0f;
 int isLionRotating = 0;
 int	isLionMoving = 0;
+int lionMoveSign = 0;
 
 //******************************************************************************
 //
@@ -140,9 +150,41 @@ float randNumber( int max ) {
 //
 ////////////////////////////////////////////////////////////////////////////////
 void convertSphericalToCartesian() {
-	eyePoint.x = cameraAngles.z * sinf( cameraAngles.x ) * sinf( cameraAngles.y );
-	eyePoint.y = cameraAngles.z * -cosf( cameraAngles.y );
-	eyePoint.z = cameraAngles.z * -cosf( cameraAngles.x ) * sinf( cameraAngles.y );
+	eyePointOffset.x = cameraAngles.z * sinf( cameraAngles.x ) * sinf( cameraAngles.y );
+	eyePointOffset.y = cameraAngles.z * -cosf( cameraAngles.y );
+	eyePointOffset.z = cameraAngles.z * -cosf( cameraAngles.x ) * sinf( cameraAngles.y );
+}
+
+void recomputeOrientation() {
+	if (lionMoveSign > 0 && !leftMouseDown) {
+		glm::vec3 desiredVector = glm::normalize(lion->direction);
+		
+		float angle = glm::acos(glm::dot(desiredVector, glm::vec3(0,0,1)));
+		if (desiredVector.x >= 0) {
+			angle *= -1;
+		}
+		
+		if (fabs(cameraAngles.x - angle) > M_PI - 0.1f) {
+			if (angle > cameraAngles.x) {
+				angle -= M_PI * 2;
+			}
+			else {
+				angle += M_PI * 2;
+			}
+		}
+		cameraAngles.x = (cameraAngles.x * (cameraCenterResponsiveness - 1) + angle) / cameraCenterResponsiveness;
+		
+		if (cameraAngles.x > 2 * M_PI) {
+			cameraAngles.x = cameraAngles.x - 2 * M_PI;
+		} else if (cameraAngles.x < 0) {
+			cameraAngles.x = 2 * M_PI + cameraAngles.x;
+		}
+	}
+	if (!controlDown) {
+		cameraAngles.z = lion->size * cameraScale;
+	}
+	
+	convertSphericalToCartesian();	
 }
 
 //******************************************************************************
@@ -173,6 +215,9 @@ static void key_callback(GLFWwindow* window, int key, int scancode, int action, 
 
   if( action == GLFW_PRESS ) {
     switch( key ) {
+		case GLFW_KEY_1:
+			chaseCamera = !chaseCamera;
+			break;
 		case GLFW_KEY_ESCAPE:
 		case GLFW_KEY_Q:
         	glfwSetWindowShouldClose( window, GLFW_TRUE );
@@ -185,9 +230,11 @@ static void key_callback(GLFWwindow* window, int key, int scancode, int action, 
 			break;
 		case GLFW_KEY_W:
 			isLionMoving += 1;
+			lionMoveSign = 1;
 			break;
 		case GLFW_KEY_S:
 			isLionMoving -= 1;
+			lionMoveSign = -1;
 			break;
     }
   }
@@ -201,9 +248,11 @@ static void key_callback(GLFWwindow* window, int key, int scancode, int action, 
 			break;
 		case GLFW_KEY_W:
 			isLionMoving -= 1;
+			lionMoveSign = 0;
 			break;
 		case GLFW_KEY_S:
 			isLionMoving += 1;
+			lionMoveSign = 0;
 			break;
 	  }
   }
@@ -426,10 +475,10 @@ void setupShaders() {
 	attrib_phong_vpos_loc 		= phongShaderProgram->getAttributeLocation( "vPos" );
 	attrib_phong_vnorm_loc	 	= phongShaderProgram->getAttributeLocation( "vNormal" );
 	
-	celShaderProgram = new CSCI441::ShaderProgram( "shaders/phongShader.v.glsl",
+	// ********** CEL SHADER ***********
+	celShaderProgram = new CSCI441::ShaderProgram( "shaders/phongCelShader.v.glsl",
 		"shaders/phongCelShader.f.glsl" );
 	
-	// fear_random_uniform_location = celShaderProgram->getUniformLocation( "random" );
 	cel_numlights_uniform_location = celShaderProgram->getUniformLocation( "numLights" );
 	cel_light_uniform_location = celShaderProgram->getUniformLocation( "lightColor" );
 	cel_diff_uniform_location = celShaderProgram->getUniformLocation( "diffColor" );
@@ -444,7 +493,19 @@ void setupShaders() {
 	cel_vpos_attrib_location = celShaderProgram->getAttributeLocation( "vPos" );
 	cel_normal_atrrib_location = celShaderProgram->getAttributeLocation( "vNorm" );
 	cel_lpos_uniform_location = celShaderProgram->getUniformLocation( "lPos" );
-
+	
+	// ********** FEAR SHADER ***********
+	
+	fearShaderProgram = new CSCI441::ShaderProgram( "shaders/fearShader.v.glsl",
+		"shaders/fearShader.f.glsl" );
+	
+	fear_random_uniform_location = fearShaderProgram->getUniformLocation( "random" );	
+	fear_m_uniform_location = fearShaderProgram->getUniformLocation( "mMatrix" );
+	fear_v_uniform_location = fearShaderProgram->getUniformLocation( "vMatrix" );
+	fear_p_uniform_location = fearShaderProgram->getUniformLocation( "pMatrix" );
+	
+	fear_vpos_attrib_location = fearShaderProgram->getAttributeLocation( "vPos" );
+	fear_normal_atrrib_location = fearShaderProgram->getAttributeLocation( "vNorm" );
 }
 
 // setupBuffers() //////////////////////////////////////////////////////////////
@@ -646,6 +707,20 @@ void updateScene() {
 //
 // Rendering / Drawing Functions - this is where the magic happens!
 
+int findClosest() {
+	glm::vec3 lionPosition = lion->position;
+	int closest = -1;
+	int minDistance = -1;
+	for (unsigned int i = 0; i < alpacas.size(); i++) {
+		float currentDistance = glm::length(lionPosition - alpacas.at(i)->position);
+		if (closest == -1 || currentDistance < minDistance) {
+			closest = i;
+			minDistance = currentDistance;
+		}
+	}
+	return closest;
+}
+
 // renderScene() ///////////////////////////////////////////////////////////////
 //
 //		This method will contain all of the objects to be drawn.
@@ -690,31 +765,45 @@ void renderScene( glm::mat4 viewMtx, glm::mat4 projMtx ) {
 	for (unsigned int i = 0; i < alpacas.size(); i++) {
 		alpacas.at(i)->draw(modelMtx, uniform_phong_m_loc, uniform_phong_ma_loc, uniform_phong_md_loc, uniform_phong_ms_loc, uniform_phong_s_loc);
 	}*/
+	
+	int closestAlpaca = findClosest();
+	if (closestAlpaca >= 0) {
+		dynamicLightPosition = alpacas.at(closestAlpaca)->position;
+		
+		// fear shader
+		fearShaderProgram->useProgram();
+		
+		glUniform1f(fear_random_uniform_location, glfwGetTime());
+		glUniformMatrix4fv(fear_v_uniform_location, 1, GL_FALSE, &viewMtx[0][0]);
+		glUniformMatrix4fv(fear_p_uniform_location, 1, GL_FALSE, &projMtx[0][0]);
+		alpacas.at(closestAlpaca)->draw(modelMtx, fear_m_uniform_location, cel_ambi_uniform_location, cel_diff_uniform_location, cel_spec_uniform_location, cel_shiny_uniform_location);
+	}
 
-	// glUniform1f(fear_random_uniform_location, glfwGetTime());
 	celShaderProgram->useProgram();
 	
 	glUniform1i(cel_numlights_uniform_location, 2);
-
 	glm::vec4 lightColors[2];
-	lightColors[0] = lightColor;
-	lightColors[1] = lightColor2;
+	lightColors[0] = globalLightColor;
+	lightColors[1] = dynamicLightColor;
 	glUniform4fv(cel_light_uniform_location, 2, &lightColors[0][0]);
 
 	glUniformMatrix4fv(cel_v_uniform_location, 1, GL_FALSE, &viewMtx[0][0]);
 	glUniformMatrix4fv(cel_p_uniform_location, 1, GL_FALSE, &projMtx[0][0]);
 	glm::vec3 lightPositions[2];
-	lightPositions[0] = lightPosition;
-	lightPositions[1] = lightPosition2;
+	lightPositions[0] = globalLightPosition;
+	lightPositions[1] = dynamicLightPosition;
 	glUniform3fv(cel_lpos_uniform_location, 2, &lightPositions[0][0]);
 	
 	// Lion
 	lion->draw(modelMtx, cel_m_uniform_location, cel_ambi_uniform_location, cel_diff_uniform_location, cel_spec_uniform_location, cel_shiny_uniform_location);
+	
 	// Alpacas
-	for (unsigned int i = 0; i < alpacas.size(); i++) {
-		alpacas.at(i)->draw(modelMtx, cel_m_uniform_location, cel_ambi_uniform_location, cel_diff_uniform_location, cel_spec_uniform_location, cel_shiny_uniform_location);
+	for (int i = 0; i < (int) alpacas.size(); i++) {
+		if (i != closestAlpaca) {
+			alpacas.at(i)->draw(modelMtx, cel_m_uniform_location, cel_ambi_uniform_location, cel_diff_uniform_location, cel_spec_uniform_location, cel_shiny_uniform_location);
+		}
 	}
-
+	
 	/*
 	// particle shader
 	particleShaderProgram->useProgram();
@@ -722,14 +811,14 @@ void renderScene( glm::mat4 viewMtx, glm::mat4 projMtx ) {
 	glUniformMatrix4fv(modelview_particle_uniform_location, 1, GL_FALSE, &mvMtx[0][0]);
 	glUniformMatrix4fv(projection_particle_uniform_location, 1, GL_FALSE, &projMtx[0][0]);
 	// sort particle systems
-	glm::vec4 v = glm::normalize(glm::vec4(lookAtPoint, 1) - glm::vec4(eyePoint, 1));
+	glm::vec4 v = glm::normalize(glm::vec4(lookAtPoint, 1) - glm::vec4(eyePointOffset, 1));
 	int size = particleSystems.size();
 	int* orderedIndices = new int[size];
 	float* distances = new float[size];
 	for (int i = 0; i < size; i++) {
 		glm::vec4 p = glm::vec4(particleSystems.at(i)->position, 1);
 		p = modelMtx * p;
-		glm::vec4 ep = (p - glm::vec4(eyePoint, 1));
+		glm::vec4 ep = (p - glm::vec4(eyePointOffset, 1));
 		float distance = glm::dot(v, ep);
 		orderedIndices[i] = i;
 		distances[i] = distance;
@@ -747,7 +836,7 @@ void renderScene( glm::mat4 viewMtx, glm::mat4 projMtx ) {
 		}
 	}
 	for (int i = 0; i < particleSystems.size(); i++) {
-		particleSystems.at(orderedIndices[i])->draw(lookAtPoint, eyePoint, modelMtx);
+		particleSystems.at(orderedIndices[i])->draw(lookAtPoint, eyePointOffset, modelMtx);
 	}
 	*/
 }
@@ -791,7 +880,7 @@ int main( int argc, char *argv[] ) {
 	//	until the user decides to close the window and quit the program.  Without a loop, the
 	//	window will display once and then the program exits.
 	while( !glfwWindowShouldClose(window) ) {	// check if the window was instructed to be closed
-
+	
     	glDrawBuffer( GL_BACK );				// work with our back frame buffer
 		glClear( GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT );	// clear the current color contents and depth buffer in the window
 
@@ -809,7 +898,13 @@ int main( int argc, char *argv[] ) {
 		glm::mat4 projectionMatrix = glm::perspective( 45.0f, windowWidth / (float) windowHeight, 0.001f, 100.0f );
 
 		// set up our look at matrix to position our camera
-		glm::mat4 viewMatrix = glm::lookAt( eyePoint,lookAtPoint, upVector );
+		cameraLocation = eyePointOffset + lion->position;
+		lookAtPoint = lion->position;
+		if (chaseCamera) {
+			lookAtPoint += lion->direction;
+		}
+		
+		glm::mat4 viewMatrix = glm::lookAt( cameraLocation, lookAtPoint, upVector );
 
 		// draw everything to the window
 		// pass our view and projection matrices as well as deltaTime between frames
@@ -819,6 +914,8 @@ int main( int argc, char *argv[] ) {
 		glfwPollEvents();				// check for any events and signal to redraw screen
 
 		updateScene();
+		
+		recomputeOrientation();
 	}
 
   glfwDestroyWindow( window );// clean up and close our window

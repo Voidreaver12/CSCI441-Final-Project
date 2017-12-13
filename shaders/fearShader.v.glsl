@@ -10,17 +10,16 @@ in vec3 vPos;
 in vec3 vNorm;
 
 uniform float random;
+uniform mat4 mMatrix;
 uniform mat4 vMatrix;
-uniform mat4 mvMatrix;
-uniform mat4 mvpMatrix;
+uniform mat4 pMatrix;
 
 out vec4 vertexNormal;
 out vec4 cameraVector;
 
 void main() {
-    //*****************************************
-    //********* Vertex Calculations  **********
-    //*****************************************
+	mat4 mvMatrix = vMatrix * mMatrix;
+	mat4 mvpMatrix = pMatrix * mvMatrix;
     
 	// get all variables into eye space	
 	vec4 vertexPosition = mvMatrix * vec4(vPos, 1.0);
@@ -35,7 +34,7 @@ void main() {
 		avg += vPos[i];
 	}
 	avg /= 3;
-	newVertex += vNorm * avg * sin(random * avg);
+	newVertex += vNorm * avg * sin(random * avg * 50);
 	
     gl_Position = mvpMatrix * vec4(newVertex, 1);
 }
