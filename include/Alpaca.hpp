@@ -35,6 +35,8 @@ private:
 	float rotationHead;
 	float rotationLegAmount;
 	float rotationTailAmount;
+	float adultSpeed;
+	float speed = 0.01f;
 };
 
 Alpaca::Alpaca(glm::vec3 p, float r, float platformSize) {
@@ -48,11 +50,12 @@ Alpaca::Alpaca(glm::vec3 p, float r, float platformSize) {
 	scareDistance = 7.0f;
 	age = 0;
 	birthTimer = 100;
+	adultSpeed = .01 + ((float)rand()/(float)RAND_MAX)*.06;
 	this->platformSize = platformSize;
 }
 
 void Alpaca::moveForward(glm::vec3 lionP) {
-	glm::vec3 newPosition = position + direction * 0.03f;
+	glm::vec3 newPosition = position + direction * speed;
 	if (newPosition.x >= platformSize) { newPosition.x = platformSize; }
 	if (newPosition.x <= -platformSize) { newPosition.x = -platformSize; }
 	if (newPosition.z >= platformSize) { newPosition.z = platformSize; }
@@ -62,7 +65,7 @@ void Alpaca::moveForward(glm::vec3 lionP) {
 }
 
 void Alpaca::moveBackward() {
-	position -= direction * 0.03f;
+	position -= direction * speed;
 }
 
 void Alpaca::update() {
@@ -71,6 +74,10 @@ void Alpaca::update() {
 	size = 0.05f + ((float)age/500.0f)*0.1f;
 	if (size >= 0.15f) {
 		size = 0.15f;
+	}
+	speed = speed + ((float)age)*0.002f*adultSpeed;
+	if (speed >= adultSpeed) {
+		speed = adultSpeed;
 	}
 }
 void Alpaca::updateHeading(glm::vec3 lionP) {
