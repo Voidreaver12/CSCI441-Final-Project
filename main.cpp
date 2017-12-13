@@ -92,6 +92,28 @@ GLint uniform_phong_m_loc, uniform_phong_v_loc, uniform_phong_p_loc, uniform_pho
 GLint uniform_phong_md_loc, uniform_phong_ms_loc, uniform_phong_ma_loc, uniform_phong_s_loc; // material properties
 GLint attrib_phong_vpos_loc, attrib_phong_vnorm_loc; // vertex attributes
 
+CSCI441::ShaderProgram *celShaderProgram = NULL;
+GLint cel_m_uniform_location;
+GLint cel_v_uniform_location;
+GLint cel_p_uniform_location;
+GLint fear_random_uniform_location;
+GLint cel_numlights_uniform_location;
+GLint cel_light_uniform_location;
+GLint cel_diff_uniform_location;
+GLint cel_spec_uniform_location;
+GLint cel_ambi_uniform_location;
+GLint cel_shiny_uniform_location;
+GLint cel_vpos_attrib_location;
+GLint cel_normal_atrrib_location;
+GLint cel_lpos_uniform_location;
+
+// lights
+glm::vec3 lightPosition ( -200.0f, 1000.0f, -100.0f );
+glm::vec3 lightPosition2 ( 1000.0f, 0.0f, -500.0f );
+
+glm::vec4 lightColor(1.0f, 1.0f, 1.0f, 1.0f);
+glm::vec4 lightColor2(0.0f, 0.0f, 0.0f, 1.0f);
+
 
 // lion and alpacas
 Lion* lion = NULL;
@@ -403,6 +425,25 @@ void setupShaders() {
 	uniform_phong_s_loc			= phongShaderProgram->getUniformLocation( "materialShininess" );
 	attrib_phong_vpos_loc 		= phongShaderProgram->getAttributeLocation( "vPos" );
 	attrib_phong_vnorm_loc	 	= phongShaderProgram->getAttributeLocation( "vNormal" );
+	
+	celShaderProgram = new CSCI441::ShaderProgram( "shaders/phongShader.v.glsl",
+		"shaders/phongCelShader.f.glsl" );
+	
+	// fear_random_uniform_location = celShaderProgram->getUniformLocation( "random" );
+	cel_numlights_uniform_location = celShaderProgram->getUniformLocation( "numLights" );
+	cel_light_uniform_location = celShaderProgram->getUniformLocation( "lightColor" );
+	cel_diff_uniform_location = celShaderProgram->getUniformLocation( "diffColor" );
+	cel_spec_uniform_location = celShaderProgram->getUniformLocation( "specColor" );
+	cel_ambi_uniform_location = celShaderProgram->getUniformLocation( "ambiColor" );
+	cel_shiny_uniform_location = celShaderProgram->getUniformLocation( "shininess" );
+	
+	cel_m_uniform_location = celShaderProgram->getUniformLocation( "mMatrix" );
+	cel_v_uniform_location = celShaderProgram->getUniformLocation( "vMatrix" );
+	cel_p_uniform_location = celShaderProgram->getUniformLocation( "pMatrix" );
+	
+	cel_vpos_attrib_location = celShaderProgram->getAttributeLocation( "vPos" );
+	cel_normal_atrrib_location = celShaderProgram->getAttributeLocation( "vNorm" );
+	cel_lpos_uniform_location = celShaderProgram->getUniformLocation( "lPos" );
 
 }
 
@@ -634,6 +675,7 @@ void renderScene( glm::mat4 viewMtx, glm::mat4 projMtx ) {
 	
 
 
+	/*
 	// Phong shader
 	phongShaderProgram->useProgram();
 
@@ -647,9 +689,31 @@ void renderScene( glm::mat4 viewMtx, glm::mat4 projMtx ) {
 	// Alpacas
 	for (unsigned int i = 0; i < alpacas.size(); i++) {
 		alpacas.at(i)->draw(modelMtx, uniform_phong_m_loc, uniform_phong_ma_loc, uniform_phong_md_loc, uniform_phong_ms_loc, uniform_phong_s_loc);
+	}*/
+
+	// glUniform1f(fear_random_uniform_location, glfwGetTime());
+	celShaderProgram->useProgram();
+	
+	glUniform1i(cel_numlights_uniform_location, 2);
+
+	glm::vec4 lightColors[2];
+	lightColors[0] = lightColor;
+	lightColors[1] = lightColor2;
+	glUniform4fv(cel_light_uniform_location, 2, &lightColors[0][0]);
+
+	glUniformMatrix4fv(cel_v_uniform_location, 1, GL_FALSE, &viewMtx[0][0]);
+	glUniformMatrix4fv(cel_p_uniform_location, 1, GL_FALSE, &projMtx[0][0]);
+	glm::vec3 lightPositions[2];
+	lightPositions[0] = lightPosition;
+	lightPositions[1] = lightPosition2;
+	glUniform3fv(cel_lpos_uniform_location, 2, &lightPositions[0][0]);
+	
+	// Lion
+	lion->draw(modelMtx, cel_m_uniform_location, cel_ambi_uniform_location, cel_diff_uniform_location, cel_spec_uniform_location, cel_shiny_uniform_location);
+	// Alpacas
+	for (unsigned int i = 0; i < alpacas.size(); i++) {
+		alpacas.at(i)->draw(modelMtx, cel_m_uniform_location, cel_ambi_uniform_location, cel_diff_uniform_location, cel_spec_uniform_location, cel_shiny_uniform_location);
 	}
-
-
 
 	/*
 	// particle shader
