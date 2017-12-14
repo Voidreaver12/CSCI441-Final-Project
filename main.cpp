@@ -120,19 +120,25 @@ GLint fear_normal_atrrib_location;
 glm::vec3 globalLightPosition ( -200.0f, 1000.0f, -100.0f );
 glm::vec3 dynamicLightPosition ( 1000.0f, 0.0f, -500.0f );
 
-glm::vec4 globalLightColor(1.0f, 1.0f, 1.0f, 1.0f);
-glm::vec4 dynamicLightColor(0.5f, 0.0f, 0.0f, 1.0f);
+//Are set from setup file
+glm::vec4 globalLightColor;
+glm::vec4 dynamicLightColor;
 
 
 // lion and alpacas
 Lion* lion = NULL;
 vector<Alpaca*> alpacas;
 float babyDistance = 1.0f;
-int birthRate = 500;
+
 float eatDistance = 1.0f;
 int isLionRotating = 0;
 int	isLionMoving = 0;
 int lionMoveSign = 0;
+
+//Are set from setup file
+int startingNumAlpacas;
+int birthRate;
+int maxAlpacas;
 
 //******************************************************************************
 //
@@ -519,7 +525,7 @@ void setupBuffers() {
 	lion = new Lion(glm::vec3(-7, 0, -7), 0.1, platformSize);
 
 	// alpacas
-	for (int i = 0; i < 10; i++) {
+	for (int i = 0; i < startingNumAlpacas; i++) {
 		float alpacaX = ((float)rand()/(float)RAND_MAX)*platformSize*2 - platformSize;
 		float alpacaZ = ((float)rand()/(float)RAND_MAX)*platformSize*2 - platformSize;
 		Alpaca* alpaca = new Alpaca(glm::vec3(alpacaX, 0.0f, alpacaZ), ((float)rand()/(float)RAND_MAX)*6.283f, platformSize);
@@ -636,6 +642,32 @@ vector<string> split(const std::string &s, char delim) {
 	return fields;
 }
 
+void readSetupFile(){
+	string line;
+	ifstream myfile ("setup.txt");
+	if (myfile.is_open()) {
+		getline (myfile,line);
+		getline (myfile,line);
+		startingNumAlpacas = int(atof(line.c_str()));
+		getline (myfile,line);
+		getline (myfile,line);
+		birthRate = int(atof(line.c_str()));
+		getline (myfile,line);
+		getline (myfile,line);
+		vector<string> color = split(line, ',');
+		globalLightColor = glm::vec4(float(atof(color.at(0).c_str())),float(atof(color.at(1).c_str())),float(atof(color.at(2).c_str())),float(atof(color.at(3).c_str())));
+		getline (myfile,line);
+		getline (myfile,line);
+		color = split(line, ',');
+		dynamicLightColor = glm::vec4(float(atof(color.at(0).c_str())),float(atof(color.at(1).c_str())),float(atof(color.at(2).c_str())),float(atof(color.at(3).c_str())));
+		getline (myfile,line);
+		getline (myfile,line);
+		maxAlpacas = int(atof(line.c_str()));
+		myfile.close();
+	}
+	else cout << "Unable to open file";
+}
+
 void makeBabies() {
 	for (unsigned int i = 0; i < alpacas.size(); i++) {
 		for (unsigned int j = 0; j < alpacas.size(); j++) {
@@ -652,6 +684,9 @@ void makeBabies() {
 					}
 			}
 		}
+	}
+	while(alpacas.size() > maxAlpacas) {
+		alpacas.pop_back();
 	}
 }
 
@@ -856,7 +891,8 @@ void renderScene( glm::mat4 viewMtx, glm::mat4 projMtx ) {
 //
 ////////////////////////////////////////////////////////////////////////////////
 int main( int argc, char *argv[] ) {
-	srand( time(0) );									// seed our RNG
+	srand( time(0) );		// seed our RNG
+	readSetupFile();
 
 	/*
 	if (argc != 2) {
