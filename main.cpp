@@ -57,13 +57,17 @@ bool leftMouseDown = false;
 glm::vec2 mousePosition( -9999.0f, -9999.0f );
 glm::vec3 eyePoint;
 glm::vec3 lookAtPoint;
-glm::vec3 cameraAngles( 1.82f, 2.01f, 15.0f );
+glm::vec3 cameraAngles( 1.82f, 2.01f, 2.0f );
 glm::vec3 eyePointOffset(   10.0f, 10.0f, 10.0f );
 glm::vec3 upVector(    0.0f,  1.0f,  0.0f );
 
 int cameraCenterResponsiveness = 15;
 float cameraScale = 10.0;
-bool chaseCamera = false;
+const int ARC_BALL = 1;
+const int CHASE_CAMERA = 2;
+const int SKY_CAMERA = 3;
+float skyCameraY = 10.0;
+int cameraMode = 1;
 
 // Skybox stuff
 struct VertexTextured { GLfloat x, y, z, s, t; };
@@ -162,7 +166,7 @@ void convertSphericalToCartesian() {
 }
 
 void recomputeOrientation() {
-	if (lionMoveSign > 0 && !leftMouseDown) {
+	if (lionMoveSign > 0 && !leftMouseDown && cameraMode != SKY_CAMERA) {
 		glm::vec3 desiredVector = glm::normalize(lion->direction);
 		
 		float angle = glm::acos(glm::dot(desiredVector, glm::vec3(0,0,1)));
@@ -185,9 +189,6 @@ void recomputeOrientation() {
 		} else if (cameraAngles.x < 0) {
 			cameraAngles.x = 2 * M_PI + cameraAngles.x;
 		}
-	}
-	if (!controlDown) {
-		cameraAngles.z = lion->size * cameraScale;
 	}
 	
 	convertSphericalToCartesian();	
@@ -222,7 +223,13 @@ static void key_callback(GLFWwindow* window, int key, int scancode, int action, 
   if( action == GLFW_PRESS ) {
     switch( key ) {
 		case GLFW_KEY_1:
-			chaseCamera = !chaseCamera;
+			cameraMode = 1;
+			break;
+		case GLFW_KEY_2:
+			cameraMode = 2;
+			break;
+		case GLFW_KEY_3:
+			cameraMode = 3;
 			break;
 		case GLFW_KEY_ESCAPE:
 		case GLFW_KEY_Q:
@@ -301,18 +308,29 @@ static void cursor_callback(GLFWwindow* window, double xpos, double ypos) {
 					mousePosition.x = xpos;
 					mousePosition.y = ypos;
 				} else {
-					if( !controlDown ) {
-						cameraAngles.x += (xpos - mousePosition.x)*0.005f;
-						cameraAngles.y += (ypos - mousePosition.y)*0.005f;
-
-						if( cameraAngles.y < M_PI/2 ) cameraAngles.y = M_PI/2 + 0.001f;
-						if( cameraAngles.y >= M_PI ) cameraAngles.y = M_PI - 0.001f;
+					double totChgSq = (xpos - mousePosition.x) + (ypos - mousePosition.y);
+					if (cameraMode == SKY_CAMERA) {
+						if (controlDown) {
+							skyCameraY += totChgSq * 0.01f;
+							if (skyCameraY < 1.0) {
+								skyCameraY = 1.0;
+							} if (skyCameraY > 15.0) {
+								skyCameraY = 15.0;
+							}
+						}
 					} else {
-						double totChgSq = (xpos - mousePosition.x) + (ypos - mousePosition.y);
-						cameraAngles.z += totChgSq*0.01f;
+						if( !controlDown ) {
+							cameraAngles.x += (xpos - mousePosition.x)*0.005f;
+							cameraAngles.y += (ypos - mousePosition.y)*0.005f;
 
-						if( cameraAngles.z <= 2.0f ) cameraAngles.z = 2.0f;
-						if( cameraAngles.z >= 30.0f ) cameraAngles.z = 30.0f;
+							if( cameraAngles.y < M_PI/2 ) cameraAngles.y = M_PI/2 + 0.001f;
+							if( cameraAngles.y >= M_PI ) cameraAngles.y = M_PI - 0.001f;
+						} else {
+							cameraAngles.z += totChgSq*0.01f;
+
+							if( cameraAngles.z <= 2.0f ) cameraAngles.z = 2.0f;
+							if( cameraAngles.z >= 30.0f ) cameraAngles.z = 30.0f;
+						}
 					}
 					convertSphericalToCartesian();
 
@@ -939,10 +957,18 @@ int main( int argc, char *argv[] ) {
 		glm::mat4 projectionMatrix = glm::perspective( 45.0f, windowWidth / (float) windowHeight, 0.001f, 100.0f );
 
 		// set up our look at matrix to position our camera
-		eyePoint = eyePointOffset + lion->position;
+		
 		lookAtPoint = lion->position;
-		if (chaseCamera) {
-			lookAtPoint += lion->direction;
+		switch (cameraMode) {
+			case CHASE_CAMERA:
+				lookAtPoint += lion->direction;
+			case ARC_BALL:
+				eyePoint = eyePointOffset + lion->position;
+				break;
+			case SKY_CAMERA:
+				eyePointOffset = glm::vec3(0.0f, skyCameraY, 0.0f);
+				eyePoint = eyePointOffset;
+				break;
 		}
 		
 		glm::mat4 viewMatrix = glm::lookAt( eyePoint, lookAtPoint, upVector );
