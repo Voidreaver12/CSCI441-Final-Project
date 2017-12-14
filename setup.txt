@@ -3,8 +3,14 @@
 #Birth Rate (Set it higher for long cooldown between baby making)
 500
 #Global Light Color
-1.0,1.0,1.0,1.0
+1.0,0.3,0.5,0.2
 #Dynamic Light Color
-0.5,0.0,0.0,1.0
+0.5,0.7,0.3,1.0
 #Max number of Alpacas
 50
+#Burst Speed
+.05
+#Max Burst Time
+100
+#Cool Down for Burst
+1000

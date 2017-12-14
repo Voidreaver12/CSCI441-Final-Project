@@ -138,11 +138,18 @@ float eatDistance = 1.0f;
 int isLionRotating = 0;
 int	isLionMoving = 0;
 int lionMoveSign = 0;
+int burstTime = 0;
+int coolDownBurstCounter = 0;
+bool bursting = false;
 
 //Are set from setup file
 int startingNumAlpacas;
 int birthRate;
 int maxAlpacas;
+float burstSpeed;
+int maxBurstTime;
+int coolDownBurstTime;
+
 
 //******************************************************************************
 //
@@ -248,6 +255,12 @@ static void key_callback(GLFWwindow* window, int key, int scancode, int action, 
 		case GLFW_KEY_S:
 			isLionMoving -= 1;
 			lionMoveSign = -1;
+			break;
+		case GLFW_KEY_SPACE:
+			if(!bursting && burstTime < maxBurstTime) {
+				bursting = true;
+				lion->speed+= burstSpeed;
+			}
 			break;
     }
   }
@@ -681,6 +694,15 @@ void readSetupFile(){
 		getline (myfile,line);
 		getline (myfile,line);
 		maxAlpacas = int(atof(line.c_str()));
+		getline (myfile,line);
+		getline (myfile,line);
+		burstSpeed = float(atof(line.c_str()));
+		getline (myfile,line);
+		getline (myfile,line);
+		maxBurstTime = int(atof(line.c_str()));
+		getline (myfile,line);
+		getline (myfile,line);
+		coolDownBurstTime = int(atof(line.c_str()));
 		myfile.close();
 	}
 	else cout << "Unable to open file";
@@ -703,15 +725,16 @@ void makeBabies() {
 			}
 		}
 	}
-	while(alpacas.size() > maxAlpacas) {
-		alpacas.pop_back();
-	}
 }
 
 void eatAlpacas() {
 	int numAlpacas = alpacas.size();
 	for (int i = 0; i < numAlpacas; i++) {
 		if (glm::length(lion->headPosition() - alpacas.at(i)->position) <= eatDistance*(lion->size/0.5f)) {
+			if(bursting) {
+				bursting = false;
+				lion->speed-= burstSpeed;
+			}
 			lion->eat(alpacas.at(i)->size);
 			glm::vec3 eatPosition = alpacas.at(i)->position;
 			delete alpacas.at(i);
@@ -746,7 +769,7 @@ void updateScene() {
 		alpacas.at(i)->updateHeading(lion->position);
 		alpacas.at(i)->moveForward(lion->position);
 	}
-	if (alpacas.size() <= 100) { makeBabies(); }
+	if (alpacas.size() <= maxAlpacas) { makeBabies(); }
 
 	eatAlpacas();
 	
@@ -785,6 +808,18 @@ int findClosest() {
 //
 ////////////////////////////////////////////////////////////////////////////////
 void renderScene( glm::mat4 viewMtx, glm::mat4 projMtx ) {
+	coolDownBurstCounter++;
+	if(bursting) {
+		burstTime++;
+		if(burstTime == maxBurstTime) {
+			bursting = false;
+			lion->speed-= burstSpeed;
+		}
+	}
+	if(coolDownBurstCounter > coolDownBurstTime) {
+		coolDownBurstCounter = 0;
+		burstTime = 0;
+	}
 
   	// stores our model matrix
   	glm::mat4 modelMtx;
