@@ -713,6 +713,10 @@ void eatAlpacas() {
 	int numAlpacas = alpacas.size();
 	for (int i = 0; i < numAlpacas; i++) {
 		if (glm::length(lion->headPosition() - alpacas.at(i)->position) <= eatDistance*(lion->size/0.5f)) {
+			if(bursting) {
+				bursting = false;
+				lion->speed-= burstSpeed;
+			}
 			lion->eat(alpacas.at(i)->size);
 			glm::vec3 eatPosition = alpacas.at(i)->position;
 			delete alpacas.at(i);
